@@ -21,7 +21,8 @@ defmodule AsyncGraph.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:phoenix_pubsub, "~> 2.1"}
+      {:phoenix_pubsub, "~> 2.1"},
+      {:phoenix_live_view, "~> 1.0"}
     ]
   end
 end

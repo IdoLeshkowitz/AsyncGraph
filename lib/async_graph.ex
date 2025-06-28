@@ -73,22 +73,33 @@ defmodule AsyncGraph do
   def handle_continue({:fire_next_step, args}, %{topsort: [next_vertex | rest_vertices]} = state) do
     step = Map.fetch!(state.vertex_to_step, next_vertex)
 
-    step.task.(args)
-    |> tap(fn result ->
-      send(state.client_pid, {:async_graph, state.graph_name, step.label, result})
-    end)
-    |> case do
-      {:ok, _} ->
+    send(
+      state.client_pid,
+      {:async_graph, :step_started, state.graph_name, step.label}
+    )
+
+    case step.task.(args) do
+      {:ok, _} = result ->
+        send(
+          state.client_pid,
+          {:async_graph, :step_completed, :success, state.graph_name, step.label, result}
+        )
+
         {:noreply, Map.replace!(state, :topsort, rest_vertices)}
 
-      {:error, _} ->
+      {:error, _} = result ->
+        send(
+          state.client_pid,
+          {:async_graph, :step_completed, :failure, state.graph_name, step.label, result}
+        )
+
         {:stop, :normal, state}
     end
   end
 
   @impl true
   def handle_continue({:fire_next_step, _args}, %{topsort: []} = state) do
-    send(state.client_pid, {:async_graph, state.graph_name, :complete})
+    send(state.client_pid, {:async_graph, :graph_completed, state.graph_name})
     {:stop, :normal, state}
   end
 end

@@ -1,42 +1,57 @@
 defmodule DemoWeb.DemoLive do
   use Phoenix.LiveView
+  use AsyncGraph.LiveView
 
   def mount(_params, _session, socket) do
     steps = [
-      AsyncGraph.build_step(:assign_a, fn _-> {:ok, "a"} end),
-      AsyncGraph.build_step(:assign_b, fn _-> {:ok, "b"} end),
-      AsyncGraph.build_step(:assign_c, fn result_b -> {:ok,  result_b <> "c"} end, [:assign_a]),
-      AsyncGraph.build_step(:assign_d, fn _-> {:ok, "d"} end, [:assign_b]),
-      AsyncGraph.build_step(:assign_e, fn _ -> {:ok, "e"} end, [:assign_c, :assign_d])
+      AsyncGraph.build_step(:assign_a, fn _ ->
+        Process.sleep(2000)
+        {:ok, "a"}
+      end),
+      AsyncGraph.build_step(
+        :assign_b,
+        fn _ ->
+          Process.sleep(2000)
+          {:ok, "b"}
+        end,
+        [:assign_a]
+      ),
+      AsyncGraph.build_step(
+        :assign_c,
+        fn socket ->
+          Process.sleep(2000)
+          {:ok, socket.assigns.graph_a.assign_a.result <> "c"}
+        end,
+        [:assign_b]
+      )
     ]
 
-    if connected?(socket) do
-      {:ok, pid} =  AsyncGraph.init(steps, :graph_a, self())
-      # dbg("gen server pid - #{inspect(pid)}")
-    end
-
-
+    socket = AsyncGraph.LiveView.init(socket, steps, :graph_a)
     {:ok, socket}
-  end
-
-  def handle_info({:async_graph, graph_name, step, {:ok, res}}, socket) do
-    dbg("Graph #{graph_name} completed step #{step}, with the result - #{res}")
-    AsyncGraph.fire_next_step(graph_name, res)
-    {:noreply, socket}
-  end
-
-  def handle_info({:async_graph, graph_name, step, {:error, reason}}, socket) do
-    dbg("Graph #{graph_name} failed in step #{step}, with reason - #{reason}")
-    {:noreply, socket}
-  end
-
-  def handle_info({:async_graph, graph_name, :complete}, socket) do
-    dbg("Graph #{graph_name} completed")
-    {:noreply, socket}
   end
 
   def render(assigns) do
     ~H"""
+    <div class="text-white">
+      <.async_result :let={assign_a} assign={@graph_a.assign_a}>
+        <:loading>
+          A loading
+        </:loading>
+        {assign_a}
+        <.async_result :let={assign_b} assign={@graph_a.assign_b}>
+          <:loading>
+            B loading
+          </:loading>
+          {assign_b}
+          <.async_result :let={assign_c} assign={@graph_a.assign_c}>
+            <:loading>
+              C loading
+            </:loading>
+            {assign_c}
+          </.async_result>
+        </.async_result>
+      </.async_result>
+    </div>
     """
   end
 end
